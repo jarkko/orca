@@ -1,3 +1,6 @@
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -33,17 +36,22 @@ async function hookServer(reply: (seen: Seen[number]) => string | null) {
 function runHook(
   stdin: string,
   env: Record<string, string>,
-  decidesPreToolUse = true
+  decidesPreToolUse = true,
+  fallbackEndpointPath?: string
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('sh', ['-c', getManagedScript('posix', { decidesPreToolUse })], {
-      env: {
-        PATH: process.env.PATH ?? '',
-        ORCA_AGENT_HOOK_TOKEN: 'token',
-        ORCA_PANE_KEY: 'tab-1:0',
-        ...env
+    const child = spawn(
+      'sh',
+      ['-c', getManagedScript('posix', { decidesPreToolUse, fallbackEndpointPath })],
+      {
+        env: {
+          PATH: process.env.PATH ?? '',
+          ORCA_AGENT_HOOK_TOKEN: 'token',
+          ORCA_PANE_KEY: 'tab-1:0',
+          ...env
+        }
       }
-    })
+    )
     let out = ''
     child.stdout.on('data', (chunk) => (out += String(chunk)))
     child.on('error', reject)
@@ -60,6 +68,36 @@ const DENY =
 describe.skipIf(process.platform === 'win32')(
   'Claude PreToolUse decisions in the hook script',
   () => {
+    it('refreshes an old shell with no endpoint variable after the UI changes port and token', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'orca-hook-reattach-'))
+      try {
+        mkdirSync(join(dir, 'agent-hooks'))
+        const endpoint = join(dir, 'agent-hooks', 'endpoint.env')
+        const { port } = await hookServer(({ headers }) =>
+          headers['x-orca-agent-hook-token'] === 'current-token' ? DENY : null
+        )
+        writeFileSync(
+          endpoint,
+          `ORCA_AGENT_HOOK_PORT=${port}\nORCA_AGENT_HOOK_TOKEN=current-token\nORCA_AGENT_HOOK_ENV=production\nORCA_AGENT_HOOK_VERSION=1\n`
+        )
+
+        expect(
+          await runHook(
+            PRE,
+            {
+              ORCA_AGENT_HOOK_PORT: '1',
+              ORCA_AGENT_HOOK_TOKEN: 'stale-token',
+              ORCA_AGENT_HOOK_ENV: 'production'
+            },
+            true,
+            endpoint
+          )
+        ).toBe(`${DENY}\n`)
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+
     it('prints Orca’s decision for PreToolUse, over either transport', async () => {
       const { port, seen } = await hookServer(() => DENY)
       expect(await runHook(PRE, { ORCA_AGENT_HOOK_PORT: String(port) })).toBe(`${DENY}\n`)

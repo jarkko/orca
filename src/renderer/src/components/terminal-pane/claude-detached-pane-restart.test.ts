@@ -169,6 +169,56 @@ describe('detached Claude account-move restart', () => {
     }
   })
 
+  it('moves a recovered busy session when its process registry becomes idle without hooks', async () => {
+    vi.setSystemTime(1)
+    let idle = false
+    seedClaudePane({ state: 'working', mainAgent: { state: 'working', stateStartedAt: 1 } })
+    window.api.claudeAccounts = {
+      ...window.api.claudeAccounts,
+      discoverSessions: async () => [
+        {
+          ptyId: OLD_PTY,
+          providerSession: {
+            key: 'session_id',
+            id: SESSION_ID,
+            transcriptPath: `/home/dev/.claude/projects/project/${SESSION_ID}.jsonl`
+          },
+          state: idle ? 'done' : 'working',
+          observedAt: Date.now(),
+          source: 'registry'
+        }
+      ]
+    }
+    const uninstall = installCodexDetachedPaneRestartExecutor()
+    try {
+      useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(useAppStore.getState().ptyIdsByTabId['tab-1']).toEqual([OLD_PTY])
+
+      const paneKey = makePaneKey('tab-1', LEAF_ID)
+      const entry = useAppStore.getState().agentStatusByPaneKey[paneKey]
+      useAppStore.setState({
+        agentStatusByPaneKey: {
+          [paneKey]: { ...entry, subagents: [{ id: 'child', state: 'working', startedAt: 1 }] }
+        }
+      })
+      idle = true
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(useAppStore.getState().ptyIdsByTabId['tab-1']).toEqual([OLD_PTY])
+      useAppStore.setState({
+        agentStatusByPaneKey: {
+          [paneKey]: { ...entry, subagents: [{ id: 'child', state: 'idle', startedAt: 1 }] }
+        }
+      })
+      await vi.advanceTimersByTimeAsync(2000)
+
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+      expect(useAppStore.getState().ptyIdsByTabId['tab-1']).toEqual([NEW_PTY])
+    } finally {
+      uninstall()
+    }
+  })
+
   it('takes over a queued restart when its tab unmounts without another status update', async () => {
     seedClaudePane()
     const unregister = registerRuntimeTerminalTab({

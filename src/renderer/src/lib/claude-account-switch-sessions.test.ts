@@ -140,33 +140,6 @@ describe('handleRunningClaudeSessionsAfterSwitch', () => {
     expect(store.queuePaneAccountRestarts).toHaveBeenLastCalledWith(['pty-1-reattached'], 'claude')
   })
 
-  it('names sessions an automatic restart left behind, and reviews only those', async () => {
-    store.settings = { claudeAccountSwitchRunningSessions: 'restart' }
-    vi.mocked(findClaudeSwitchSessions).mockResolvedValue(
-      scan([candidate(1)], {
-        elsewhere: [{ ...candidate(2), accountId: null }],
-        cantMove: [{ ...candidate(3), reason: 'own-folder' }]
-      })
-    )
-
-    await handleRunningClaudeSessionsAfterSwitch(SWITCH)
-    const [, options] = toastSuccess.mock.lastCall!
-    expect(options.description).toBe("2 other sessions weren't moved.")
-    options.action.onClick()
-
-    expect(getClaudeAccountSwitchPrompt()).toMatchObject({
-      review: true,
-      sessions: {
-        onAccount: [],
-        elsewhere: [expect.objectContaining({ ptyId: 'pty-2', accountLabel: 'System default' })],
-        cantMove: [expect.objectContaining({ ptyId: 'pty-3' })]
-      }
-    })
-    answerClaudeAccountSwitchPrompt('restart')
-    expect(store.queuePaneAccountRestarts).toHaveBeenNthCalledWith(1, ['pty-1'], 'claude')
-    expect(store.queuePaneAccountRestarts).toHaveBeenLastCalledWith(['pty-2'], 'claude')
-  })
-
   it('says why shared sessions stayed when nothing else on the account moved', async () => {
     store.settings = { claudeAccountSwitchRunningSessions: 'restart' }
     vi.mocked(findClaudeSwitchSessions).mockImplementation(async ({ onShared }) => {

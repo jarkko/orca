@@ -3,6 +3,21 @@ import { GLOBAL_FLAGS } from '../args'
 
 export const AGENT_LAUNCH_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['agent', 'move-account'],
+    summary: 'Resume all live Claude terminals on the selected account, waiting for busy turns',
+    usage: 'orca agent move-account --agent claude [--account <id|default>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'account'],
+    notes: [
+      'Requires an open local Orca desktop. With no --account, retries moves to the current host selection without changing the account.',
+      '--account selects that account first; default selects System default. The existing host/WSL selection lane determines which terminals can move.',
+      'Queues every resumable in-lane session on another account, including sessions missed by a previous switch. Busy turns restart once idle. This explicit command bypasses the automatic ask/keep preference.'
+    ],
+    examples: [
+      'orca agent move-account --agent claude --json',
+      'orca agent move-account --agent claude --account default --json'
+    ]
+  },
+  {
     path: ['agent', 'launch'],
     summary: 'Start an agent in an existing workspace, as a chat or a terminal',
     usage:

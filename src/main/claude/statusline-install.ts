@@ -1,3 +1,4 @@
+import { localHookEndpointFilePath } from '../agent-hooks/hook-endpoint-refresh'
 import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import { writeManagedScript, type HooksConfig } from '../agent-hooks/installer-utils'
 import { getManagedStatusLineCommand, getManagedStatusLineScript } from './statusline-script'
@@ -23,7 +24,7 @@ export function installClaudeManagedStatusLine(
     return config
   }
   const scriptPath = getStatusLineScriptPath(settings)
-  writeManagedScript(scriptPath, getManagedStatusLineScript('local'))
+  writeManagedScript(scriptPath, getManagedStatusLineScript('local', localHookEndpointFilePath()))
   const next = applyManagedStatusLine(
     config,
     getManagedStatusLineCommand(scriptPath),

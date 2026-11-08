@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
@@ -38,6 +38,8 @@ vi.mock('./codex-pane-selection-lane', async (importOriginal) => ({
     derivedLaneKey: null
   })
 }))
+
+afterEach(() => vi.unstubAllGlobals())
 
 const LOCAL = { kind: 'local' } as const
 const HOST = { runtime: 'host' } as const
@@ -163,6 +165,67 @@ describe('findMovableClaudeSessions', () => {
       hasChildProcesses: true
     })
     vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('claude')
+  })
+
+  it('recovers missing or misleading hook metadata without settling a newer turn', async () => {
+    seedPanes([{ n: 1, agentType: 'claude' }])
+    useAppStore.setState({ agentStatusByPaneKey: {} })
+    vi.stubGlobal('window', {
+      api: {
+        claudeAccounts: {
+          discoverSessions: async () => [
+            {
+              ptyId: 'pty-1',
+              providerSession: {
+                key: 'session_id',
+                id: SESSION_ID,
+                transcriptPath: `${FOLDER_A}/projects/project/${SESSION_ID}.jsonl`
+              },
+              state: 'done',
+              source: 'registry',
+              observedAt: 1
+            }
+          ]
+        }
+      }
+    })
+
+    expect(await movable('acct-a')).toEqual(['pty-1'])
+    expect(
+      useAppStore.getState().agentStatusByPaneKey[makePaneKey('tab-1', leafId(1))]?.providerSession
+        ?.id
+    ).toBe(SESSION_ID)
+
+    const paneKey = makePaneKey('tab-1', leafId(1))
+    const entry = useAppStore.getState().agentStatusByPaneKey[paneKey]
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          ...entry,
+          updatedAt: 2,
+          evidenceObservedAt: 2,
+          state: 'working',
+          mainAgent: { state: 'working', stateStartedAt: 2 },
+          toolName: 'Bash',
+          toolInput: 'sleep 2',
+          providerSession: {
+            key: 'session_id',
+            id: SESSION_ID,
+            transcriptPath: `${FOLDER_B}/projects/project/${SESSION_ID}.jsonl`
+          }
+        }
+      }
+    })
+
+    expect(
+      (await scan('acct-a', HOST, undefined, 'acct-b')).onAccount.map((pane) => pane.ptyId)
+    ).toEqual(['pty-1'])
+    expect(useAppStore.getState().agentStatusByPaneKey[paneKey]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'working' },
+      toolName: 'Bash',
+      toolInput: 'sleep 2'
+    })
   })
 
   it('counts only sessions running on the outgoing account', async () => {
@@ -396,13 +459,13 @@ describe('findQueuedClaudeRestartsOnAccount', () => {
     ).toEqual([ptyId(1)])
   })
 
-  it("cancels a System default session's queued restart when switching back to the login it holds", () => {
+  it("keeps a default-folder restart queued when only the selected managed folder's login matches", () => {
     seedPanes([{ n: 1, agentType: 'claude', configDir: SYSTEM_FOLDER }])
     useAppStore.setState({ pendingPaneAccountRestarts: { [ptyId(1)]: 'claude' } })
     const queuedOn = (accountId: string, host: ClaudeHostFolders) =>
       findQueuedClaudeRestartsOnAccount({ owner: LOCAL, target: HOST, accountId, host })
 
-    expect(queuedOn('acct-a', hostFolders())).toEqual([ptyId(1)])
+    expect(queuedOn('acct-a', hostFolders())).toEqual([])
     expect(queuedOn('acct-b', hostFolders())).toEqual([])
   })
 })
@@ -429,6 +492,14 @@ describe('a switch away from the login System default holds', () => {
       foregroundProcess: 'claude',
       hasChildProcesses: true
     })
+  })
+
+  it('moves a default-folder session to the selected managed folder even when their login matches', async () => {
+    seedPanes([{ n: 1, agentType: 'claude', configDir: SYSTEM_FOLDER }])
+
+    const found = await scan('acct-b', HOST, hostFolders(), 'acct-a')
+
+    expect(found.elsewhere.map((pane) => pane.ptyId)).toEqual(['pty-1'])
   })
 
   it('moves System default sessions with that exact login, and never compares managed folders', async () => {

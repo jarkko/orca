@@ -47,6 +47,16 @@ export function resolveClaudePaneFolder(
     : { kind: 'own-folder' }
 }
 
+/** Login aliases do not prove that a running process launched from the newly selected folder. */
+export function isClaudePaneOnSelectedFolder(
+  folder: ClaudePaneFolder | undefined,
+  accountId: string | null
+): boolean {
+  return folder?.kind === 'account'
+    ? folder.accountId === accountId
+    : folder?.kind === 'system-default' && accountId === null
+}
+
 /**
  * Whether a pane runs on an account (null is System default). A System default pane also counts
  * when that folder is signed in to the account's own login, as an older Orca's copied login is.

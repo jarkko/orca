@@ -132,6 +132,7 @@ export type ClaudeRateLimitAccountsState = {
 
 /** A Claude switch made over runtime RPC, e.g. from the phone. */
 export type ClaudeAccountSelectionChange = {
+  restartAll?: true
   target: CodexAccountSelectionTarget
   before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
   after: { state: ClaudeRateLimitAccountsState; accountId: string | null }

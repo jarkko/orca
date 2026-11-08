@@ -1,3 +1,4 @@
+import { localHookEndpointFilePath } from '../agent-hooks/hook-endpoint-refresh'
 import { rmSync } from 'node:fs'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
@@ -88,11 +89,9 @@ const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
 }
 
 export class ClaudeHookService {
-  private readonly options: ClaudeHookServiceOptions
-
-  constructor(options: ClaudeHookServiceOptions = DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS) {
-    this.options = options
-  }
+  constructor(
+    private readonly options: ClaudeHookServiceOptions = DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS
+  ) {}
 
   private get usesWindowsEntry(): boolean {
     return process.platform === 'win32' && this.options.agent === 'claude'
@@ -100,6 +99,7 @@ export class ClaudeHookService {
 
   private managedScript(target: 'local' | 'posix' = 'local'): string {
     return getManagedScript(target, {
+      fallbackEndpointPath: target === 'local' ? localHookEndpointFilePath() : undefined,
       source: this.options.source,
       skipWhenDevinImportsClaude: this.options.agent === 'claude',
       skipWhenGrokImportsClaude: this.options.agent === 'claude',
@@ -176,12 +176,12 @@ export class ClaudeHookService {
     const scriptPath = getManagedScriptPath(this.options.settings)
     const payload = this.managedScript()
     await (this.usesWindowsEntry
-      ? refreshWindowsClaudeHookFiles(scriptPath, payload)
+      ? refreshWindowsClaudeHookFiles(scriptPath, payload, localHookEndpointFilePath())
       : refreshManagedScriptIfPresent(scriptPath, payload))
     // Refresh existing statusline scripts without creating new installs.
     await refreshManagedScriptIfPresent(
       getStatusLineScriptPath(this.options.settings),
-      getManagedStatusLineScript('local')
+      getManagedStatusLineScript('local', localHookEndpointFilePath())
     )
   }
 
@@ -215,7 +215,7 @@ export class ClaudeHookService {
     )
     const payload = this.managedScript()
     if (this.usesWindowsEntry) {
-      installWindowsClaudeHookFiles(scriptPath, payload)
+      installWindowsClaudeHookFiles(scriptPath, payload, localHookEndpointFilePath())
     } else {
       writeManagedScript(scriptPath, payload)
     }

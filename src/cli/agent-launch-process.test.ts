@@ -13,7 +13,7 @@ import {
 } from '../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { agentLaunchFixture } from './agent-launch-test-fixtures'
 
-it('real CLI processes carry surface choices and refuse invalid or unsupported picks before mutation', async () => {
+it('real CLI processes request Claude account moves and validate agent launch surface choices', async () => {
   const manifest = createRequire(resolve('package.json')).resolve('bun/package.json')
   const { bin } = z
     .object({ bin: z.object({ bun: z.string() }) })
@@ -46,11 +46,13 @@ it('real CLI processes carry surface choices and refuse invalid or unsupported p
           id: request.id,
           ok: true,
           result:
-            request.method === 'status.get'
-              ? { capabilities }
-              : request.method === 'worktree.show'
-                ? { worktree: { id: 'wt-fixture', lineage: null } }
-                : agentLaunchFixture('wt-fixture').result,
+            request.method === 'accounts.moveClaudeSessions'
+              ? { requested: true }
+              : request.method === 'status.get'
+                ? { capabilities }
+                : request.method === 'worktree.show'
+                  ? { worktree: { id: 'wt-fixture', lineage: null } }
+                  : agentLaunchFixture('wt-fixture').result,
           _meta: { runtimeId: 'fixture-host' }
         })}\n`
       )
@@ -82,6 +84,29 @@ it('real CLI processes carry surface choices and refuse invalid or unsupported p
       SystemRoot: process.env.SystemRoot,
       ComSpec: process.env.ComSpec
     }
+    const move = await runProcess({
+      program,
+      args: [
+        resolve('src/cli/index.ts'),
+        'agent',
+        'move-account',
+        '--agent',
+        'claude',
+        '--account',
+        'default',
+        '--json'
+      ],
+      cwd: root,
+      env,
+      timeoutMs: 15_000
+    })
+    expect(move.code).toBe(0)
+    expect(
+      requests
+        .filter(({ method }) => method === 'accounts.moveClaudeSessions')
+        .map(({ params }) => params)
+    ).toEqual([{ accountId: null }])
+
     const mutate = () =>
       requests.filter(
         ({ method }) => method.startsWith('agent.launch') || method === 'worktree.create'

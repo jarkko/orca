@@ -32,9 +32,9 @@ export default function ClaudeAccountSwitchDialog(): React.JSX.Element | null {
 function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): React.JSX.Element {
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const { onAccount, elsewhere, cantMove } = prompt.sessions
-  // Only sessions on the outgoing account start ticked.
+  // Every resumable session in this selection lane starts ticked.
   const [ticked, setTicked] = useState<ReadonlySet<string>>(
-    () => new Set(onAccount.map((session) => session.ptyId))
+    () => new Set([...onAccount, ...elsewhere].map((session) => session.ptyId))
   )
   const listedCount = onAccount.length + elsewhere.length + cantMove.length
   const chosen = [...onAccount, ...elsewhere]

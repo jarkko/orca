@@ -1,3 +1,4 @@
+import { CLAUDE_ACCOUNT_MOVE_METHODS } from './claude-account-move-methods'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
 import type { OrcadFeature } from '../orcad-feature-readiness'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
@@ -140,6 +141,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
       return runtime.getAccountsSnapshot()
     }
   }),
+  ...CLAUDE_ACCOUNT_MOVE_METHODS,
   defineMethod({
     name: 'accounts.selectClaude',
     permission: 'accounts-admin',

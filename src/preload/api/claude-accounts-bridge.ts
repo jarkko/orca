@@ -3,6 +3,8 @@ import type { ClaudeAccountSelectionChange } from '../../shared/managed-account-
 import type { PreloadApi } from '../api-types'
 
 export const claudeAccountsApi = {
+  discoverSessions: (args: { ptyIds: string[] }) =>
+    ipcRenderer.invoke('claudeAccounts:discoverSessions', args),
   list: () => ipcRenderer.invoke('claudeAccounts:list'),
   add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null; copyLink?: boolean }) =>
     ipcRenderer.invoke('claudeAccounts:add', args),

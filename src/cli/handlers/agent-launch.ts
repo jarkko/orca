@@ -13,6 +13,25 @@ import { getRequiredWorktreeSelector } from '../selectors'
 import { resolveCurrentAgentWorkspaceSelector } from '../agent-workspace-selector'
 
 export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
+  'agent move-account': async ({ flags, client, json }) => {
+    if (getRequiredStringFlag(flags, 'agent') !== 'claude' || client.isRemote) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'agent move-account requires --agent claude and the local Orca desktop.'
+      )
+    }
+    const account = flags.get('account')
+    const result = await client.call(
+      'accounts.moveClaudeSessions',
+      account === undefined ? {} : { accountId: account === 'default' ? null : account }
+    )
+    printResult(
+      result,
+      json,
+      () =>
+        'Requested Claude session moves. Busy sessions will resume on the selected account when idle.'
+    )
+  },
   'agent launch': async ({ flags, client, cwd, json, rawArgs }) => {
     const launch = readCliAgentLaunch(flags, parseCliAgent(getRequiredStringFlag(flags, 'agent')), {
       createsWorktree: false

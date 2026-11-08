@@ -62,6 +62,12 @@ describe('Claude account restart readiness', () => {
     expect(isAccountRestartReady(useAppStore.getState(), 'tab-1', LEAF_ID, 'pty-1')).toBe(true)
 
     useAppStore.getState().setAgentStatus(PANE_KEY, {
+      ...stopped.payload,
+      workingMode: undefined
+    })
+    expect(selectReadyAccountRestartPtyIds(useAppStore.getState(), 'tab-1')).toEqual(['pty-1'])
+
+    useAppStore.getState().setAgentStatus(PANE_KEY, {
       prompt: '',
       agentType: 'claude',
       state: 'working',

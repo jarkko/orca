@@ -1,5 +1,6 @@
 /** Find sessions affected by account selection; resume preserves the session while launch reads the newly selected account folder. */
 
+import { refreshClaudeAccountMoveSessions } from './claude-account-move-recovery'
 import { type AppState, useAppStore } from '@/store'
 import {
   confirmRuntimeTerminalForegroundProcess,
@@ -32,6 +33,7 @@ import { resolveAgentAccountRestartResumeStartup } from './agent-account-restart
 import { isSessionHeldByAnotherPane } from './claude-session-pane-holders'
 import {
   isClaudePaneOnAccount,
+  isClaudePaneOnSelectedFolder,
   resolveClaudePaneFolder,
   type ClaudeHostFolders
 } from './claude-pane-account-folder'
@@ -73,19 +75,7 @@ async function isClaudeInForeground(
   return isClaudeProcess(fresh)
 }
 
-/** Whether the pane's Claude is mid-turn; a restart during a permission prompt or question drops it. */
-export function isClaudePaneMidTurn(state: AppState, paneKey: string): boolean {
-  const entry = state.agentStatusByPaneKey[paneKey]
-  if (entry?.agentType !== 'claude' || entry.state === 'done') {
-    return false
-  }
-  // Shells can keep the combined row working after Stop/StopFailure ended the main turn.
-  return !(
-    entry.state === 'working' &&
-    entry.workingMode === 'monitoring' &&
-    entry.mainAgent?.state === 'done'
-  )
-}
+export { isClaudePaneMidTurn } from './claude-account-move-readiness'
 
 /** Resolve the account actually used at launch; an account without its own login may use System default (null). */
 export function claudeLaunchAccountId(
@@ -159,10 +149,9 @@ export function findQueuedClaudeRestartsOnAccount(args: {
     if (
       pane.inLane &&
       state.pendingPaneAccountRestarts[pane.ptyId] === 'claude' &&
-      isClaudePaneOnAccount(
+      isClaudePaneOnSelectedFolder(
         resolveClaudePaneFolder(pane.transcriptPath, saved, host),
-        args.accountId,
-        host
+        args.accountId
       )
     ) {
       ptyIds.push(pane.ptyId)
@@ -220,7 +209,7 @@ function scanPane(
   if (folder.kind === 'own-folder') {
     return { group: 'cantMove', pane, reason: 'own-folder' }
   }
-  if (isClaudePaneOnAccount(folder, args.toAccountId, args.host)) {
+  if (isClaudePaneOnSelectedFolder(folder, args.toAccountId)) {
     return null
   }
   const resumable = resolveAgentAccountRestartResumeStartup('claude', {
@@ -280,6 +269,7 @@ export async function findClaudeSwitchSessions(args: {
   if (args.owner.kind !== 'local') {
     return found
   }
+  await refreshClaudeAccountMoveSessions()
   const state = useAppStore.getState()
   const hostSwitch = isHostTarget(args.target)
   const scanArgs = {

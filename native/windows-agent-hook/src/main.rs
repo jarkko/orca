@@ -11,6 +11,7 @@ use std::env;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 // Same caps as the curl form's `--connect-timeout 0.5 --max-time 1.5`.
@@ -87,7 +88,32 @@ fn var(name: &str) -> String {
 /// The file src/shared/agent-hook-listener/endpoint-publication.ts writes, or "" if unreadable.
 fn read_endpoint_file() -> String {
     let mut text = String::new();
-    let read = File::open(var("ORCA_AGENT_HOOK_ENDPOINT")).and_then(|file| {
+    let endpoint = var("ORCA_AGENT_HOOK_ENDPOINT");
+    let path = if endpoint.is_empty() && var("ORCA_AGENT_HOOK_ENV") == "production" {
+        let profile = var("ORCA_USER_DATA_PATH");
+        if profile.is_empty() {
+            let Some(pointer) = env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|dir| dir.join("endpoint.path")))
+            else {
+                return text;
+            };
+            let mut path = String::new();
+            let read =
+                File::open(pointer).and_then(|file| file.take(4096).read_to_string(&mut path));
+            if read.is_err() || path.len() >= 4096 {
+                return text;
+            }
+            PathBuf::from(path.trim())
+        } else {
+            PathBuf::from(profile)
+                .join("agent-hooks")
+                .join("endpoint.cmd")
+        }
+    } else {
+        PathBuf::from(endpoint)
+    };
+    let read = File::open(path).and_then(|file| {
         file.take(ENDPOINT_FILE_BYTE_LIMIT)
             .read_to_string(&mut text)
     });

@@ -1,4 +1,8 @@
 import {
+  buildPosixHookEndpointRefreshLines,
+  buildWindowsHookEndpointRefreshLines
+} from '../agent-hooks/hook-endpoint-refresh'
+import {
   WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
   buildPosixClaudeBackgroundJobGuardLines
 } from '../agent-hooks/claude-background-job-guard'
@@ -23,7 +27,10 @@ export function getManagedStatusLineCommand(scriptPath: string): string {
 }
 
 // Forward live usage without OAuth polling; emit no stdout to preserve the terminal statusline.
-export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'): string {
+export function getManagedStatusLineScript(
+  target: 'local' | 'posix' = 'local',
+  fallbackEndpointPath?: string
+): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
@@ -55,7 +62,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
       '"%SystemRoot%\\System32\\findstr.exe" /c:\\"rate_limits\\" "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul',
       `if errorlevel 1 goto :${STATUSLINE_CLEANUP_LABEL}`,
       // Refresh stale endpoint coordinates after Orca restarts, falling back to PTY env.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      ...buildWindowsHookEndpointRefreshLines(fallbackEndpointPath),
       `if "%ORCA_AGENT_HOOK_PORT%"=="" goto :${STATUSLINE_CLEANUP_LABEL}`,
       `if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto :${STATUSLINE_CLEANUP_LABEL}`,
       // Stamp only eligible posts so skipped ticks never postpone the next post.
@@ -100,9 +107,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     '  *\'"rate_limits"\'*) ;;',
     '  *) exit 0 ;;',
     'esac',
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
-    'fi',
+    ...buildPosixHookEndpointRefreshLines(fallbackEndpointPath),
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
     'fi',

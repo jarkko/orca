@@ -1,3 +1,4 @@
+import type { ClaudeAccountMoveSession } from '../../shared/claude-account-move-session'
 import type {
   ClaudeAccountSelectionChange,
   ClaudeRateLimitAccountsState,
@@ -43,6 +44,7 @@ export type CodexAccountsApi = {
 }
 
 export type ClaudeAccountsApi = {
+  discoverSessions?: (args: { ptyIds: string[] }) => Promise<ClaudeAccountMoveSession[]>
   list: () => Promise<ClaudeRateLimitAccountsState>
   add: (args?: {
     runtime?: 'host' | 'wsl'

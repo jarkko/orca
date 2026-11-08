@@ -1,3 +1,4 @@
+import { installClaudeAccountMoveRecovery } from '@/lib/claude-account-move-recovery'
 import { useAppStore } from '@/store'
 import { subscribeMountedTerminalTabChanges } from '@/runtime/mounted-terminal-tab-registry'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
@@ -42,8 +43,10 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
       scheduleClaimSweep()
     }
   })
+  const stopRecovery = installClaudeAccountMoveRecovery()
   scheduleClaimSweep()
   return () => {
+    stopRecovery()
     unsubscribe()
     unsubscribeMountedTabs()
     if (executorGeneration === generation) {

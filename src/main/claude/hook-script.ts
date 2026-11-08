@@ -1,3 +1,7 @@
+import {
+  buildPosixHookEndpointRefreshLines,
+  buildWindowsHookEndpointRefreshLines
+} from '../agent-hooks/hook-endpoint-refresh'
 import { buildHookProcessCapture } from '../agent-hooks/hook-process-capture'
 import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
@@ -36,6 +40,7 @@ import {
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',
   options: {
+    fallbackEndpointPath?: string
     source?: AgentHookSource
     skipWhenDevinImportsClaude?: boolean
     skipWhenGrokImportsClaude?: boolean
@@ -54,7 +59,7 @@ export function getManagedScript(
       // CLAUDE_CODE_SUBPROCESS_ENV_SCRUB drops ORCA_PANE_KEY; restore it before any guard reads it.
       ...buildWindowsScrubSafeEnvRestoreLines(),
       // Refresh endpoint coordinates for PTYs surviving an Orca restart.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      ...buildWindowsHookEndpointRefreshLines(options.fallbackEndpointPath),
       // Outside an Orca pane the caller may abandon stdin; exit before owning it (#11549).
       ...buildWindowsHookEnvironmentGuardLines(),
       WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
@@ -96,10 +101,7 @@ export function getManagedScript(
     ...buildPosixClaudeBackgroundJobGuardLines(),
     ...(source === 'claude' ? buildHookProcessCapture() : []),
     // Surviving PTYs need fresh endpoint coordinates; suppress errors and survive outer set -e.
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  unset ORCA_AGENT_HOOK_TRANSPORT',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
-    'fi',
+    ...buildPosixHookEndpointRefreshLines(options.fallbackEndpointPath),
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  spool_hook_event',
     '  exit 0',

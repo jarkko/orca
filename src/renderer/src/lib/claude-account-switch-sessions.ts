@@ -100,11 +100,15 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   target: CodexAccountSelectionTarget
   before: ClaudeAccountSnapshot
   after: ClaudeAccountSnapshot
+  restartAll?: true
 }): Promise<'show-confirmation' | 'handled'> {
   const fromAccountId = claudeLaunchAccountId(args.before.state, args.before.accountId)
   const toAccountId = claudeLaunchAccountId(args.after.state, args.after.accountId)
-  // Why: a server's switch, or one between coinciding launch folders, moves nothing here.
-  if (args.owner.kind !== 'local' || fromAccountId === toAccountId) {
+  // A repeated selection only retries moves when explicitly requested by the CLI.
+  if (
+    args.owner.kind !== 'local' ||
+    (args.before.accountId === args.after.accountId && !args.restartAll)
+  ) {
     return 'show-confirmation'
   }
   const generation = ++switchGeneration
@@ -121,7 +125,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   })) {
     store.consumePendingPaneAccountRestart(ptyId)
   }
-  if (readPolicy() === 'keep') {
+  if (!args.restartAll && readPolicy() === 'keep') {
     return 'show-confirmation'
   }
   let uncheckedCount = 0
@@ -150,7 +154,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     return 'handled'
   }
   // Why re-read: the setting may change while the scan runs.
-  const policy = readPolicy()
+  const policy = args.restartAll ? 'restart' : readPolicy()
   if (policy === 'keep') {
     return 'show-confirmation'
   }
@@ -160,8 +164,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
       getClaudeAccountLabel(args.before.state, args.before.accountId)
     )
   }
-  // Why: other sessions are listed only alongside a move, so parallel-account users get no prompt.
-  if (!found || found.onAccount.length === 0) {
+  if (!found || found.onAccount.length + found.elsewhere.length === 0) {
     if (sharedCount > 0) {
       warnSharedSessions(
         sharedCount,
@@ -183,14 +186,15 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     nextAccountLabel
   }
   if (policy === 'restart') {
-    queueClaudeRestarts(found.onAccount.map((candidate) => candidate.ptyId))
-    const others = found.elsewhere.length + found.cantMove.length
-    announceRestart(found.onAccount.length, nextAccountLabel, others, () => {
+    const moving = [...found.onAccount, ...found.elsewhere]
+    queueClaudeRestarts(moving.map((candidate) => candidate.ptyId))
+    const others = found.cantMove.length
+    announceRestart(moving.length, nextAccountLabel, others, () => {
       if (generation === switchGeneration) {
         setPrompt({
           id: generation,
           review: true,
-          sessions: { ...sessions, onAccount: [] },
+          sessions: { ...sessions, onAccount: [], elsewhere: [] },
           ...labels
         })
       }

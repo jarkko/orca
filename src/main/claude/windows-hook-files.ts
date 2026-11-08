@@ -66,9 +66,16 @@ export function getWindowsClaudeHookFileStatus(
   return status
 }
 
-export function installWindowsClaudeHookFiles(entryPath: string, payload: string): void {
+export function installWindowsClaudeHookFiles(
+  entryPath: string,
+  payload: string,
+  endpointPath?: string
+): void {
   writeManagedScript(getWindowsClaudeHookPayloadPath(entryPath), payload)
   writeManagedScript(entryPath, getWindowsClaudeHookEntry())
+  if (endpointPath) {
+    writeManagedScript(join(dirname(entryPath), 'endpoint.path'), endpointPath)
+  }
 }
 
 export function getWindowsClaudeHookEntry(): string {
@@ -93,7 +100,8 @@ export function getWindowsClaudeHookEntry(): string {
 
 export async function refreshWindowsClaudeHookFiles(
   entryPath: string,
-  payload: string
+  payload: string,
+  endpointPath?: string
 ): Promise<void> {
   const bundledHook = resolveBundledWindowsNativeHookExecutable()
   if (bundledHook) {
@@ -111,4 +119,7 @@ export async function refreshWindowsClaudeHookFiles(
   // Publish payload first so a failed migration preserves the old single-file hook.
   await restoreManagedScript(getWindowsClaudeHookPayloadPath(entryPath), payload)
   await restoreManagedScript(entryPath, getWindowsClaudeHookEntry())
+  if (endpointPath) {
+    await restoreManagedScript(join(dirname(entryPath), 'endpoint.path'), endpointPath)
+  }
 }

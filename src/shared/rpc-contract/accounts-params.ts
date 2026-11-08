@@ -37,6 +37,10 @@ export const SelectAccountParams = z.object({
     .transform((v) => (v === null ? null : v))
 })
 
+export const MoveClaudeSessionsParams = z.object({
+  accountId: z.string().min(1).nullable().optional()
+})
+
 export const SelectClaudeAccountParams = SelectAccountParams.extend({
   // The web client moves running sessions in its own window; older hosts strip this.
   movesRunningSessions: z.literal(true).optional()
